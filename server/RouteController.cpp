@@ -34,6 +34,7 @@
 #include "OffloadUtils.h"
 
 #include <android-base/file.h>
+#include <android-base/properties.h>
 #include <android-base/stringprintf.h>
 #include <android-base/strings.h>
 #include "log/log.h"
@@ -1079,6 +1080,9 @@ int RouteController::modifyRoute(uint16_t action, uint16_t flags, const char* in
 }
 
 static void maybeModifyQdiscClsact(const char* interface, bool add) {
+    // clsact is only needed for the eBPF forwarding programs.
+    if (!android::base::GetBoolProperty("ro.kernel.ebpf.supported", true)) return;
+
     // The clsact attaching of v4- tun interface is triggered by ClatdController::maybeStartBpf
     // because the clat is started before the v4- interface is added to the network and the
     // clat startup needs to add {in, e}gress filters.

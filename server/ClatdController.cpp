@@ -72,6 +72,7 @@ namespace net {
 
 void ClatdController::init(void) {
     std::lock_guard guard(mutex);
+    if (!base::GetBoolProperty("ro.kernel.ebpf.supported", true)) return;
 
     int rv = getClatEgress4MapFd();
     if (rv < 0) {
@@ -198,6 +199,7 @@ int ClatdController::generateIpv6Address(const char* iface, const in_addr v4,
 }
 
 void ClatdController::maybeStartBpf(const ClatdTracker& tracker) {
+    if (!base::GetBoolProperty("ro.kernel.ebpf.supported", true)) return;
     auto isEthernet = android::net::isEthernet(tracker.iface);
     if (!isEthernet.ok()) {
         ALOGE("isEthernet(%s[%d]) failure: %s", tracker.iface, tracker.ifIndex,
@@ -332,6 +334,7 @@ void ClatdController::setIptablesDropRule(bool add, const char* iface, const cha
 }
 
 void ClatdController::maybeStopBpf(const ClatdTracker& tracker) {
+    if (!base::GetBoolProperty("ro.kernel.ebpf.supported", true)) return;
     int rv = tcFilterDelDevIngressClatIpv6(tracker.ifIndex);
     if (rv < 0) {
         ALOGE("tcFilterDelDevIngressClatIpv6(%d[%s]) failure: %s", tracker.ifIndex, tracker.iface,

@@ -27,6 +27,7 @@
 #define LOG_NDEBUG 0
 
 #include <android-base/file.h>
+#include <android-base/properties.h>
 #include <android-base/stringprintf.h>
 #include <android-base/strings.h>
 #include <log/log.h>
@@ -92,8 +93,8 @@ FirewallController::FirewallController(void) : mMaxUid(discoverMaximumValidUid(k
 int FirewallController::setupIptablesHooks(void) {
     int res = flushRules();
 
-    // mUseBpfOwnerMatch should be removed, but it is still depended upon by test code.
-    mUseBpfOwnerMatch = true;
+    // Legacy kernels enforce UID rules through iptables owner matches.
+    mUseBpfOwnerMatch = android::base::GetBoolProperty("ro.kernel.ebpf.supported", true);
     if (mUseBpfOwnerMatch) {
         return res;
     }

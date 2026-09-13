@@ -58,7 +58,14 @@ protected:
     BandwidthController mBw;
     TunInterface mTun;
 
+    void useLegacyAccounting() { mBw.mBpfSupported = false; }
+    void failRestore() {
+        BandwidthController::iptablesRestoreFunction =
+                [](IptablesTarget, const std::string&, std::string*) { return -1; };
+    }
+
     void SetUp() {
+        mBw.mBpfSupported = true;
         ASSERT_EQ(0, mTun.init());
     }
 
@@ -462,3 +469,36 @@ TEST_F(BandwidthControllerTest, CostlyAlert) {
     expectIptablesRestoreCommands(expected);
 }
 
+
+TEST_F(BandwidthControllerTest, LegacyAppRules) {
+    useLegacyAccounting();
+    EXPECT_EQ(0, mBw.addNaughtyApps({10001}));
+    EXPECT_EQ(0, mBw.removeNaughtyApps({10001}));
+    EXPECT_EQ(0, mBw.addNiceApps({10002}));
+    EXPECT_EQ(0, mBw.removeNiceApps({10002}));
+    expectIptablesRestoreCommands(ExpectedIptablesCommands{
+        {V4V6, "*filter\n-I bw_penalty_box -m owner --uid-owner 10001 -j REJECT\nCOMMIT\n"},
+        {V4V6, "*filter\n-D bw_penalty_box -m owner --uid-owner 10001 -j REJECT\nCOMMIT\n"},
+        {V4V6, "*filter\n-I bw_happy_box -m owner --uid-owner 10002 -j RETURN\nCOMMIT\n"},
+        {V4V6, "*filter\n-D bw_happy_box -m owner --uid-owner 10002 -j RETURN\nCOMMIT\n"},
+    });
+}
+
+TEST_F(BandwidthControllerTest, LegacyAccountingUsesQtaguid) {
+    useLegacyAccounting();
+    EXPECT_EQ(0, mBw.enableBandwidthControl());
+    ASSERT_FALSE(sRestoreCmds.empty());
+    const auto& accounting = sRestoreCmds.back();
+    EXPECT_EQ(V4V6, accounting.first);
+    EXPECT_EQ(std::string::npos, accounting.second.find("--object-pinned"));
+    EXPECT_NE(std::string::npos, accounting.second.find("-A bw_INPUT -m owner --socket-exists"));
+    EXPECT_NE(std::string::npos, accounting.second.find("-A bw_OUTPUT -m owner --socket-exists"));
+    EXPECT_NE(std::string::npos, accounting.second.find("-A bw_raw_PREROUTING -m owner --socket-exists"));
+    EXPECT_NE(std::string::npos, accounting.second.find("-A bw_mangle_POSTROUTING -m owner --socket-exists"));
+}
+
+TEST_F(BandwidthControllerTest, LegacyAppRuleFailurePropagates) {
+    useLegacyAccounting();
+    failRestore();
+    EXPECT_NE(0, mBw.addNaughtyApps({10001}));
+}
